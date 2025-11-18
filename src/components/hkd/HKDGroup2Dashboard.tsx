@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Card from '../ui/Card';
 import { Transaction, BusinessCategory, UserProfile, BusinessSector, InputInvoice, ExpenseCategory, LineItem } from '../../types';
@@ -78,8 +79,7 @@ const DeclarationPreviewModal: React.FC<{onClose: () => void; transactions: Tran
     
     const handleExportXML = () => {
          const periodStr = `${String(period.getMonth() + 1).padStart(2, '0')}/${period.getFullYear()}`;
-        const todayStr = new Date().toLocaleDateString('vi-VN');
-
+        
         const xmlContent = `
 <HSoThueDTu>
     <HSoKhaiThue>
