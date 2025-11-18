@@ -86,6 +86,7 @@ export const analyzeInvoiceImage = async (base64Image: string, mimeType: string)
         if (!jsonText) {
             throw new Error("Trợ lý AI không trả về nội dung JSON hợp lệ.");
         }
+        
         const parsedJson = JSON.parse(jsonText.trim());
         return parsedJson;
 
