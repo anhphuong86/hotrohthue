@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 // For Vite, environment variables exposed to the client must be prefixed with VITE_
