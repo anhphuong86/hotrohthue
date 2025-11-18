@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Card from '../ui/Card';
 import { Transaction, BusinessCategory, UserProfile, BusinessSector, InputInvoice, ExpenseCategory, LineItem } from '../../types';
-import { HKD_TAX_RATES, HKD_INDICATOR_CODES, HKD_GROUP2_THRESHOLD, HKD_E_INVOICE_THRESHOLD } from '../../constants';
+import { HKD_TAX_RATES, HKD_INDICATOR_CODES, HKD_E_INVOICE_THRESHOLD } from '../../constants';
 import UserProfileModal from '../profile/UserProfileModal';
 import { analyzeInvoiceImage } from '../../services/geminiService';
 import InvoiceListItem from './InvoiceListItem';
@@ -381,7 +381,7 @@ const HKDGroup2Dashboard: React.FC<HKDGroup2DashboardProps> = ({ onReset, sector
     const netProfit = profitBeforeTax - totalTax;
 
     const totalAnnualRevenue = useMemo(() => transactions.filter(t => new Date(t.date).getFullYear() === selectedDate.getFullYear()).reduce((sum, t) => sum + t.amount, 0), [transactions, selectedDate]);
-
+    
     const handleAddRevenue = (data: Omit<Transaction, 'id'|'date'>) => setTransactions(prev => [{ ...data, id: Date.now().toString(), date: new Date().toISOString() }, ...prev]);
     const handleAddExpense = (data: Omit<InputInvoice, 'id'>) => {
         setInputInvoices(prev => [{ ...data, id: Date.now().toString() }, ...prev]);
