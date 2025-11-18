@@ -2,20 +2,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Card from '../ui/Card';
 import { Transaction, BusinessCategory, UserProfile, BusinessSector, InputInvoice, ExpenseCategory, LineItem } from '../../types';
-import { HKD_TAX_RATES, HKD_INDICATOR_CODES, HKD_E_INVOICE_THRESHOLD } from '../../constants';
+import { HKD_TAX_RATES, HKD_INDICATOR_CODES, HKD_GROUP2_THRESHOLD, HKD_E_INVOICE_THRESHOLD } from '../../constants';
 import UserProfileModal from '../profile/UserProfileModal';
 import { analyzeInvoiceImage } from '../../services/geminiService';
 import InvoiceListItem from './InvoiceListItem';
 
-
-// (Modal components and other helpers will be defined below the main component)
-// ... (DeclarationPreviewModal, MonthPicker, UrgentActionAlert are defined here as in the previous version)
-
 const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN').format(Math.round(value));
 
-
-// ... (UrgentActionAlert, MonthPicker, DeclarationPreviewModal from previous version would go here)
-// For brevity, let's assume they exist and focus on the new additions and changes.
 const UrgentActionAlert: React.FC<{ annualRevenue: number; sector: BusinessSector }> = ({ annualRevenue, sector }) => {
     const requiresEInvoiceFromCashRegister = annualRevenue > HKD_E_INVOICE_THRESHOLD && sector === BusinessSector.RetailRestaurant;
     if (!requiresEInvoiceFromCashRegister) return null;
@@ -33,7 +26,8 @@ const UrgentActionAlert: React.FC<{ annualRevenue: number; sector: BusinessSecto
         </div>
     );
 };
-const MonthPicker: React.FC<{ selectedDate: Date; onChange: (date: Date) => void;}> = ({ selectedDate, onChange }) => { /* Same as before */ 
+
+const MonthPicker: React.FC<{ selectedDate: Date; onChange: (date: Date) => void;}> = ({ selectedDate, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [pickerYear, setPickerYear] = useState(selectedDate.getFullYear());
     const pickerRef = useRef<HTMLDivElement>(null);
@@ -53,33 +47,35 @@ const MonthPicker: React.FC<{ selectedDate: Date; onChange: (date: Date) => void
         </div>
     );
 };
+
 const DeclarationPreviewModal: React.FC<{onClose: () => void; transactions: Transaction[]; period: Date; userProfile: UserProfile;}> = ({onClose, transactions, period, userProfile}) => { 
     const [showPdfTip, setShowPdfTip] = useState(false);
     const summary = useMemo(() => {
-        const initialSummary = (Object.keys(BusinessCategory) as Array<keyof typeof BusinessCategory>).map(key => ({
-             category: BusinessCategory[key],
-             indicator: HKD_INDICATOR_CODES[BusinessCategory[key]],
-             revenue: 0,
-             vat: 0,
-             pit: 0
-        }));
-        
-        const result = transactions.reduce((acc, t) => {
-            const item = acc.find(i => i.category === t.category);
-            if (item) {
-                const rates = HKD_TAX_RATES[t.category];
-                item.revenue += t.amount;
-                item.vat += t.amount * rates.vat;
-                item.pit += t.amount * rates.pit;
-            }
-            return acc;
-        }, initialSummary);
-        
-        // FIX: Filter out categories with no revenue to avoid showing empty rows on the declaration form.
-        return result.filter(item => item.revenue > 0);
+        const summaryMap: Map<BusinessCategory, { category: BusinessCategory; indicator: string; revenue: number; vat: number; pit: number; }> = new Map();
 
+        transactions.forEach(t => {
+            if (!summaryMap.has(t.category)) {
+                summaryMap.set(t.category, {
+                    category: t.category,
+                    indicator: HKD_INDICATOR_CODES[t.category],
+                    revenue: 0,
+                    vat: 0,
+                    pit: 0
+                });
+            }
+
+            const item = summaryMap.get(t.category)!;
+            const rates = HKD_TAX_RATES[t.category];
+            item.revenue += t.amount;
+            item.vat += t.amount * rates.vat;
+            item.pit += t.amount * rates.pit;
+        });
+
+        return Array.from(summaryMap.values());
     }, [transactions]);
+    
     const totals = useMemo(() => summary.reduce((acc, item) => ({revenue: acc.revenue + item.revenue, vat: acc.vat + item.vat, pit: acc.pit + item.pit}), { revenue: 0, vat: 0, pit: 0 }), [summary]);
+    
     const handleExportXML = () => {
          const periodStr = `${String(period.getMonth() + 1).padStart(2, '0')}/${period.getFullYear()}`;
         const todayStr = new Date().toLocaleDateString('vi-VN');
@@ -145,9 +141,7 @@ const DeclarationPreviewModal: React.FC<{onClose: () => void; transactions: Tran
     return (<div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex justify-center items-center z-[100] p-4">
         <div className="bg-slate-800 border border-slate-700 p-6 rounded-lg shadow-xl w-full max-w-4xl text-slate-300">
             <div className="printable-content text-sm bg-white p-4 rounded text-black">
-                {/* Modal content from previous version */}
                  <h3 className="text-xl font-bold mb-1 text-center uppercase">Tờ khai thuế đối với hộ kinh doanh, cá nhân kinh doanh</h3>
-                 {/* ... all the table and user profile info */}
                  <table className="w-full text-xs border-collapse border border-black">
                     <thead className="bg-gray-100 font-bold text-center">
                         <tr><th rowSpan={2} className="p-1 border border-black">STT</th><th rowSpan={2} className="p-1 border border-black">Nhóm ngành nghề</th><th rowSpan={2} className="p-1 border border-black">Mã chỉ tiêu</th><th colSpan={2} className="p-1 border border-black">Thuế GTGT</th><th colSpan={2} className="p-1 border border-black">Thuế TNCN</th></tr>
@@ -167,6 +161,7 @@ const DeclarationPreviewModal: React.FC<{onClose: () => void; transactions: Tran
         </div>
     </div>)
 };
+
 const AddRevenueWizard: React.FC<{onClose: () => void; onAdd: (transaction: Omit<Transaction, 'id' | 'date'>) => void; initialCategory?: BusinessCategory | null;}> = ({onClose, onAdd, initialCategory}) => { 
     const [step, setStep] = useState(1); 
     const [amount, setAmount] = useState(''); 
@@ -272,7 +267,6 @@ const AddExpenseModal: React.FC<{onClose: () => void; onSave: (invoice: Omit<Inp
             <div className="bg-slate-800 border border-slate-700 p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <h3 className="text-xl font-bold text-slate-100 mb-4 flex-shrink-0">Thêm Chi phí (Hóa đơn Đầu vào)</h3>
                 <div className="space-y-4 overflow-y-auto pr-2 flex-grow">
-                    {/* Form fields for supplier, date, etc. */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div><label className="block text-sm font-medium text-slate-300">Ngày hóa đơn</label><input type="date" value={invoiceData.date} onChange={e => setInvoiceData(p=>({...p, date:e.target.value}))} className="mt-1 block w-full bg-slate-900 border border-slate-600 rounded-md p-2 text-slate-100" /></div>
                         <div><label className="block text-sm font-medium text-slate-300">Phân loại Chi phí</label><select value={invoiceData.expenseCategory} onChange={e => setInvoiceData(p=>({...p, expenseCategory:e.target.value as ExpenseCategory}))} className="mt-1 block w-full bg-slate-900 border border-slate-600 rounded-md p-2 text-slate-100">{Object.values(ExpenseCategory).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
@@ -283,7 +277,6 @@ const AddExpenseModal: React.FC<{onClose: () => void; onSave: (invoice: Omit<Inp
                     </div>
                      <div><label className="block text-sm font-medium text-slate-300">Ghi chú chung</label><input type="text" value={invoiceData.description} onChange={e => setInvoiceData(p=>({...p, description:e.target.value}))} className="mt-1 block w-full bg-slate-900 border border-slate-600 rounded-md p-2 text-slate-100" /></div>
                     
-                    {/* Line Items */}
                     <div className="border-t border-slate-700 pt-4 mt-4">
                         <h4 className="text-lg font-semibold text-slate-200 mb-2">Chi tiết Hạng mục</h4>
                         <div className="space-y-2">
@@ -300,7 +293,6 @@ const AddExpenseModal: React.FC<{onClose: () => void; onSave: (invoice: Omit<Inp
                         <button onClick={addLineItem} className="mt-2 text-sm text-teal-400 font-semibold hover:text-teal-300">+ Thêm dòng</button>
                     </div>
 
-                    {/* Image Upload */}
                     <div className="border-t border-slate-700 pt-4 mt-4">
                          <label className="block text-sm font-medium text-slate-300 mb-2">Đính kèm ảnh Hóa đơn (tùy chọn)</label>
                          <div className="flex items-center space-x-4">
@@ -384,12 +376,8 @@ const HKDGroup2Dashboard: React.FC<HKDGroup2DashboardProps> = ({ onReset, sector
     const netProfit = profitBeforeTax - totalTax;
 
     const totalAnnualRevenue = useMemo(() => transactions.filter(t => new Date(t.date).getFullYear() === selectedDate.getFullYear()).reduce((sum, t) => sum + t.amount, 0), [transactions, selectedDate]);
-<<<<<<< HEAD
-    const isOverGroup2Threshold = totalRevenue > HKD_GROUP2_THRESHOLD;
+    const isOverGroup2Threshold = totalAnnualRevenue > HKD_GROUP2_THRESHOLD;
 
-=======
-    
->>>>>>> 3fcb5828d3b4e6a3a57ea2f4e6f6b5082d1279ba
     const handleAddRevenue = (data: Omit<Transaction, 'id'|'date'>) => setTransactions(prev => [{ ...data, id: Date.now().toString(), date: new Date().toISOString() }, ...prev]);
     const handleAddExpense = (data: Omit<InputInvoice, 'id'>) => {
         setInputInvoices(prev => [{ ...data, id: Date.now().toString() }, ...prev]);
@@ -418,7 +406,13 @@ const HKDGroup2Dashboard: React.FC<HKDGroup2DashboardProps> = ({ onReset, sector
 
                 <UrgentActionAlert annualRevenue={totalAnnualRevenue} sector={sector} />
                 
-                {/* Date Picker */}
+                {isOverGroup2Threshold && (
+                    <div className="my-6 p-4 bg-orange-900/50 border-l-4 border-orange-500 text-orange-300 rounded-r-lg">
+                        <h4 className="font-bold text-orange-200">Cảnh báo: Doanh thu năm vượt ngưỡng 3 Tỷ VND</h4>
+                        <p className="text-sm mt-1">Doanh thu năm của bạn đã vượt ngưỡng Nhóm 2. Bạn cần chuẩn bị để chuyển đổi sang phương pháp kế toán của Nhóm 3 (như doanh nghiệp) vào năm sau.</p>
+                    </div>
+                )}
+                
                 <div className="flex flex-col sm:flex-row justify-center items-center gap-4 my-6 p-2 bg-slate-900 rounded-lg">
                      <div className="flex bg-slate-800 p-1 rounded-lg font-semibold">
                         <button onClick={() => setViewMode('day')} className={`px-3 py-1.5 rounded-md text-sm transition-colors ${viewMode === 'day' ? 'bg-slate-600 text-teal-300' : 'text-slate-400'}`}>Theo Ngày</button>
@@ -430,7 +424,6 @@ const HKDGroup2Dashboard: React.FC<HKDGroup2DashboardProps> = ({ onReset, sector
                      {viewMode === 'year' && <div className="flex items-center space-x-2"><button onClick={() => setSelectedDate(d => new Date(d.getFullYear() - 1, 0, 15))} className="p-2 rounded-full hover:bg-slate-700 text-slate-300">&lt;</button><span className="font-semibold text-slate-200 w-24 text-center">{selectedDate.getFullYear()}</span><button onClick={() => setSelectedDate(d => new Date(d.getFullYear() + 1, 0, 15))} disabled={selectedDate.getFullYear() >= new Date().getFullYear()} className="p-2 rounded-full hover:bg-slate-700 disabled:opacity-50 text-slate-300">&gt;</button></div>}
                 </div>
 
-                {/* Financial Summary */}
                 <Card className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <div className="text-center"><p className="text-sm text-slate-400">Doanh thu</p><p className="text-lg font-bold text-teal-400">{formatCurrency(totalRevenue)}</p></div>
                     <div className="text-center"><p className="text-sm text-slate-400">Chi phí</p><p className="text-lg font-bold text-orange-400">{formatCurrency(totalExpenses)}</p></div>
@@ -439,7 +432,6 @@ const HKDGroup2Dashboard: React.FC<HKDGroup2DashboardProps> = ({ onReset, sector
                     <div className="col-span-2 md:col-span-1 text-center bg-slate-800 p-2 rounded-lg"><p className="text-sm font-semibold text-slate-300">Lợi nhuận ròng</p><p className="text-xl font-bold text-green-400">{formatCurrency(netProfit)}</p></div>
                 </Card>
 
-                {/* Tabs & Action Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
                      <div className="flex bg-slate-800 p-1 rounded-lg font-semibold self-start sm:self-center">
                         <button onClick={() => setActiveTab('revenue')} className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'revenue' ? 'bg-slate-600 text-teal-300 shadow' : 'text-slate-400'}`}>Doanh thu (Đầu ra)</button>
@@ -451,7 +443,6 @@ const HKDGroup2Dashboard: React.FC<HKDGroup2DashboardProps> = ({ onReset, sector
                     </div>
                 </div>
 
-                {/* Ledger Table */}
                  <div className="overflow-y-auto pr-2 border-t border-slate-700 pt-4 min-h-[200px] max-h-[400px]">
                     {activeTab === 'revenue' && (
                         periodRevenue.length === 0 
